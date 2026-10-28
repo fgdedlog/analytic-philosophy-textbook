@@ -107,7 +107,57 @@
     return out;
   }
 
-  var API = { speakText: speakText, speakFormula: speakFormula, speakCode: speakCode, chunk: chunk, splitSentences: splitSentences };
+
+  /* ---------------------------------------------------------------- voice ranking
+     The Web Speech API has no gender field, so "likely male" and "natural" are judged from the voice's name / id.
+     Higher score = better. Pure function, unit-tested in node. */
+  var MALE_NAMES = /(?:^|[^a-z])(?:male|daniel|arthur|oliver|george|ryan|thomas|james|alex|fred|rishi|aaron|guy|davis|mark|david|brian|christopher|eric|roger|steffan|liam|connor|william|gordon|lee|matthew|ravi|prabhat|jason|tony|andrew|jacob|ethan|henry|harry|neil)(?:[^a-z]|$)/i;
+  var FEMALE_NAMES = /(?:^|[^a-z])(?:female|woman|samantha|serena|kate|stephanie|sonia|libby|hazel|susan|victoria|karen|moira|tessa|fiona|zira|jenny|aria|emma|amy|ava|michelle|ana|catherine|linda|heather|nicky|veena|kathy|ellen|joanna|salli|kimberly|ivy|nova|sara|lucy|mia|maisie|abbi|bella|elizabeth|holly|natasha|clara|olivia|ruth|siri)(?:[^a-z]|$)/i;
+  var MALE_IDS = /en[-_]gb[-_]x[-_](?:gbd|gbb|rjs)(?:[^a-z]|$)/i;         // Google/Android UK male variants
+  var FEMALE_IDS = /en[-_]gb[-_]x[-_](?:gba|gbc|gbg|fis)(?:[^a-z]|$)/i;   // Google/Android UK female variants
+  var NATURAL_RE = /natural|neural|online|enhanced|premium|wavenet|studio|google uk english male/i;
+  var POOR_RE = /compact|espeak|robot|novelty/i;
+  var NOVELTY_RE = /^(?:albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|deranged|hysterical|pipe organ)$/i;
+
+  function normLang(v) { return String(v && v.lang || '').replace('_', '-').toLowerCase(); }
+  function rankVoice(v) {
+    var name = String(v && v.name || ''), id = String(v && v.voiceURI || ''), both = name + ' ' + id, lang = normLang(v);
+    var isEn = lang.indexOf('en') === 0 && (lang.length === 2 || lang.charAt(2) === '-');
+    var female = FEMALE_IDS.test(both) || FEMALE_NAMES.test(name), male = !female && (MALE_IDS.test(both) || MALE_NAMES.test(name));
+    var network = !!v && v.localService === false;
+    var natural = NATURAL_RE.test(both) || (network && /google|network/i.test(both));
+    var novelty = NOVELTY_RE.test(name.replace(/\s*\(.*$/, ''));
+    var score = 0;
+    score += lang === 'en-gb' ? 50 : isEn ? 10 : -100;
+    if (natural) score += 40;
+    if (network) score += 15;
+    if (POOR_RE.test(both)) score -= 25;
+    if (male) score += 60;
+    if (female) score -= 80;
+    if (novelty) score -= 200;
+    return { score: score, male: male, female: female, natural: natural, english: isEn, gb: lang === 'en-gb', novelty: novelty };
+  }
+  var REGION = { gb: 'UK', us: 'US', au: 'Australia', ie: 'Ireland', in: 'India', za: 'South Africa', nz: 'New Zealand', ca: 'Canada' };
+  function voiceLabel(v) {
+    var r = rankVoice(v), name = String(v.name || v.voiceURI || 'Voice').replace(/^Microsoft\s+/i, '').replace(/\s+-\s+English.*$/i, '').replace(/\s+/g, ' ').trim();
+    var lang = normLang(v), reg = lang.split('-')[1] || '', hint = [];
+    hint.push(r.english ? (REGION[reg] || (reg ? reg.toUpperCase() : 'English')) : lang || '?');
+    if (r.male) hint.push('male'); else if (r.female) hint.push('female');
+    if (r.natural && !NATURAL_RE.test(name)) hint.push('natural');
+    var vm = /-x-([a-z]{3})(?:-(local|network))?/i.exec(String(v.voiceURI || '') + ' ' + String(v.name || ''));   // Android: tell identically-named voices apart
+    if (vm) hint.push(vm[1].toLowerCase() + (vm[2] ? ' ' + vm[2].toLowerCase() : ''));
+    return name + ' (' + hint.join(', ') + ')';
+  }
+  /* Best first; ties keep the browser's own order (stable). */
+  function sortVoices(list) {
+    return list.map(function (v, i) { return { v: v, i: i, r: rankVoice(v) }; })
+      .sort(function (a, b) { return b.r.score - a.r.score || a.i - b.i; })
+      .map(function (x) { return x.v; });
+  }
+  /* Voices shown by default: English, not obviously female, not novelty. */
+  function isPreferred(v) { var r = rankVoice(v); return r.english && !r.female && !r.novelty; }
+
+  var API = { rankVoice: rankVoice, voiceLabel: voiceLabel, sortVoices: sortVoices, isPreferred: isPreferred, speakText: speakText, speakFormula: speakFormula, speakCode: speakCode, chunk: chunk, splitSentences: splitSentences };
   if (typeof module === 'object' && module.exports) module.exports = API;
   if (typeof document === 'undefined' || !root || !root.document) return;
 
@@ -210,8 +260,8 @@
   }
 
   /* ---------------------------------------------------------------- UI + speech engine */
-  var RATES = [0.75, 1, 1.25, 1.5];
-  var K_RATE = 'apt-ra-rate', K_VOICE = 'apt-ra-voice';
+  var RATES = [0.75, 0.85, 0.95, 1, 1.25, 1.5], DEFAULT_RATE = 0.95;
+  var K_RATE = 'apt-ra-rate', K_VOICE = 'apt-ra-voice', K_ALL = 'apt-ra-all';
   var NO_PAGES = { search: 1, 'truth-table': 1, equivalence: 1, 'proof-checker': 1, practice: 1 };
 
   var memStore = {};
@@ -247,9 +297,9 @@
       return;
     }
 
-    var S = { blocks: null, bi: 0, ci: 0, status: 'idle', tok: 0, utt: null, watch: null, retry: 0, hl: null, voices: [], voice: null, rate: 1, listeners: [], timers: [] };
-    var r = parseFloat(lsGet(K_RATE)); S.rate = RATES.indexOf(r) >= 0 ? r : 1;
-    var savedVoice = lsGet(K_VOICE) || '';
+    var S = { blocks: null, bi: 0, ci: 0, status: 'idle', tok: 0, utt: null, watch: null, retry: 0, hl: null, voices: [], voice: null, rate: DEFAULT_RATE, voiceKey: null, listeners: [], timers: [] };
+    var r = parseFloat(lsGet(K_RATE)); S.rate = RATES.indexOf(r) >= 0 ? r : DEFAULT_RATE;
+    var savedVoice = lsGet(K_VOICE) || '', showAll = lsGet(K_ALL) === '1';
 
     /* ---- build the bar */
     var bar = el('section', { 'class': 'ra-bar', 'aria-label': 'Read aloud', 'data-state': 'idle' });
@@ -266,7 +316,9 @@
     lRate.appendChild(sRate);
     var lVoice = el('label', { 'class': 'ra-field ra-field-voice' }, '<span>Voice</span>'), sVoice = el('select', { 'class': 'ra-voice', 'aria-label': 'Voice' });
     lVoice.appendChild(sVoice);
-    opts.appendChild(lRate); opts.appendChild(lVoice);
+    var lAll = el('label', { 'class': 'ra-all' }, '<input type="checkbox" class="ra-showall"> <span>Show all voices</span>'), cAll = lAll.querySelector('input');
+    cAll.checked = showAll;
+    opts.appendChild(lRate); opts.appendChild(lVoice); opts.appendChild(lAll);
     var status = el('p', { 'class': 'ra-status' }); status.setAttribute('aria-live', 'off');
     bar.appendChild(rowMain); bar.appendChild(opts); bar.appendChild(status);
     main.insertBefore(bar, article);
@@ -281,25 +333,32 @@
 
     function loadVoices() {
       var all = []; try { all = [].slice.call(synth.getVoices() || []); } catch (e) { }
-      var en = all.filter(function (v) { return langOf(v).indexOf('en') === 0; });
-      var gb = en.filter(function (v) { return langOf(v) === 'en-gb'; }), other = en.filter(function (v) { return langOf(v) !== 'en-gb'; });
-      var list = en.length ? gb.concat(other) : all;
-      var key = list.map(voiceKey).join('|');
+      var en = all.filter(function (v) { return rankVoice(v).english; });
+      var pool = en.length ? en : all;                               // best-first English voices (everything if no English)
+      var ranked = sortVoices(pool);
+      var shown = ranked;
+      if (!showAll) {
+        shown = ranked.filter(function (v) { return isPreferred(v) || voiceKey(v) === savedVoice; });
+        if (!shown.length) shown = ranked;
+      } else {
+        shown = ranked.concat(sortVoices(all.filter(function (v) { return pool.indexOf(v) < 0; })));
+      }
+      var key = shown.map(voiceKey).join('|') + '#' + (showAll ? 1 : 0) + '#' + savedVoice + '#' + (en.length ? 1 : 0);
       if (key === S.voiceKey) return; S.voiceKey = key;
-      S.voices = list; sVoice.innerHTML = '';
-      var auto = el('option', { value: '' }); auto.textContent = list.length ? 'Automatic (' + (gb.length ? 'British English' : 'English') + ')' : 'Default voice'; sVoice.appendChild(auto);
-      list.forEach(function (v) { var o = el('option', { value: voiceKey(v) }); o.textContent = v.name + ' (' + String(v.lang || '').replace('_', '-') + ')'; sVoice.appendChild(o); });
-      if (savedVoice && list.some(function (v) { return voiceKey(v) === savedVoice; })) sVoice.value = savedVoice; else sVoice.value = '';
+      S.best = ranked[0] || null;                                    // used by Automatic
+      S.voices = shown; sVoice.innerHTML = '';
+      var auto = el('option', { value: '' }); auto.setAttribute('data-auto', '1'); sVoice.appendChild(auto);
+      shown.forEach(function (v) { var o = el('option', { value: voiceKey(v) }); o.textContent = voiceLabel(v); sVoice.appendChild(o); });
+      if (savedVoice && shown.some(function (v) { return voiceKey(v) === savedVoice; })) sVoice.value = savedVoice; else sVoice.value = '';
       pickVoice();
     }
     function pickVoice() {
       var k = sVoice.value, v = null;
       if (k) S.voices.forEach(function (x) { if (voiceKey(x) === k) v = x; });
-      if (!v && S.voices.length) {
-        var pref = S.voices.filter(function (x) { return langOf(x) === 'en-gb'; });
-        v = pref.filter(function (x) { return /natural|neural|premium|enhanced|online/i.test(x.name); })[0] || pref[0] || S.voices[0];
-      }
+      if (!v) v = S.best || null;                                    // Automatic: best-ranked (male, natural, en-GB first)
       S.voice = v;
+      var auto = sVoice.querySelector('option[data-auto]');
+      if (auto) auto.textContent = !S.voices.length ? 'Default voice' : v ? 'Automatic: ' + voiceLabel(v) : 'Automatic';
     }
     loadVoices();
     if (typeof synth.addEventListener === 'function') on(synth, 'voiceschanged', loadVoices);
@@ -410,6 +469,7 @@
     on(bNext, 'click', function () { go(1); });
     on(bGear, 'click', function () { var o = bar.classList.toggle('ra-open'); bGear.setAttribute('aria-expanded', o ? 'true' : 'false'); });
     on(sRate, 'change', function () { S.rate = parseFloat(sRate.value) || 1; lsSet(K_RATE, S.rate); restartCurrent(); });
+    on(cAll, 'change', function () { showAll = cAll.checked; lsSet(K_ALL, showAll ? '1' : '0'); loadVoices(); });
     on(sVoice, 'change', function () { savedVoice = sVoice.value; lsSet(K_VOICE, savedVoice); pickVoice(); restartCurrent(); });
     var halt = function () { invalidate(); cancelSpeech(); };
     on(root, 'pagehide', halt); on(root, 'beforeunload', halt);

@@ -359,6 +359,8 @@ html.has-ra { scroll-padding-top: calc(var(--top-h) + 84px); }
 .ra-bar.ra-open .ra-opts { display: flex; }
 .ra-field { display: flex; flex-direction: column; gap: 2px; font-size: .78rem; color: var(--muted); flex: 0 0 auto; }
 .ra-field-voice { flex: 1 1 12rem; min-width: 0; }
+.ra-all { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); min-height: 44px; flex: 1 1 100%; }
+.ra-all input { width: 20px; height: 20px; margin: 0; }
 .ra-bar select { font: inherit; font-size: 1rem; min-height: 44px; padding: 0 8px; width: 100%; color: var(--text); background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; }
 .ra-status { margin: 6px 2px 0; font-size: .82rem; color: var(--muted); min-height: 0; }
 .ra-status:empty { display: none; }
@@ -373,6 +375,7 @@ tr.ra-current { box-shadow: none; outline: 2px solid var(--ra-edge); outline-off
   .ra-field-voice { flex: 1 1 auto; }
   .ra-field select { width: auto; }
   .ra-field-voice select { width: 100%; }
+  .ra-all { flex: 0 0 auto; min-height: 0; white-space: nowrap; }
   .ra-main { flex: 0 0 auto; }
   .ra-play { flex: 0 0 auto; }
   .ra-status { flex: 1 0 100%; margin: 0 2px; }
