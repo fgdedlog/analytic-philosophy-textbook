@@ -210,14 +210,6 @@
   }
 
   /* ---------------------------------------------------------------- UI + speech engine */
-  var ICON = {
-    play: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></svg>',
-    pause: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z"/></svg>',
-    stop: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>',
-    prev: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 5h2.5v14H6zM20 5v14L9.5 12z"/></svg>',
-    next: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M15.5 5H18v14h-2.5zM4 5l10.5 7L4 19z"/></svg>',
-    gear: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 7h9.2a3 3 0 0 1 5.6 0H20v2h-1.2a3 3 0 0 1-5.6 0H4zm3 8h1.2a3 3 0 0 1 5.6 0H20v2h-6.2a3 3 0 0 1-5.6 0H7zM16 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-5 8a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>'
-  };
   var RATES = [0.75, 1, 1.25, 1.5];
   var K_RATE = 'apt-ra-rate', K_VOICE = 'apt-ra-voice';
   var NO_PAGES = { search: 1, 'truth-table': 1, equivalence: 1, 'proof-checker': 1, practice: 1 };
@@ -249,7 +241,7 @@
     try { synth = root.speechSynthesis; } catch (e) { }
     if (!synth || typeof root.SpeechSynthesisUtterance !== 'function') {
       var note = el('p', { 'class': 'ra-note', role: 'note' }, '');
-      note.textContent = '🔇 Read aloud is not available in this browser. Try Chrome, Edge, Safari or Firefox.';
+      note.textContent = 'Read aloud is not available in this browser. Try Chrome, Edge, Safari or Firefox.';
       main.insertBefore(note, article);
       root.__aptRA = { destroy: function () { if (note.parentNode) note.parentNode.removeChild(note); }, unsupported: true };
       return;
@@ -262,11 +254,11 @@
     /* ---- build the bar */
     var bar = el('section', { 'class': 'ra-bar', 'aria-label': 'Read aloud', 'data-state': 'idle' });
     var rowMain = el('div', { 'class': 'ra-main' });
-    var bPlay = el('button', { type: 'button', 'class': 'ra-play', 'aria-label': 'Read aloud' }, '<span class="ra-ico" aria-hidden="true">🔊</span><span class="ra-lbl">Read aloud</span>');
-    var bPrev = el('button', { type: 'button', 'class': 'ra-btn ra-prev', 'aria-label': 'Previous paragraph', title: 'Previous paragraph', disabled: '' }, ICON.prev);
-    var bNext = el('button', { type: 'button', 'class': 'ra-btn ra-next', 'aria-label': 'Next paragraph', title: 'Next paragraph', disabled: '' }, ICON.next);
-    var bStop = el('button', { type: 'button', 'class': 'ra-btn ra-stop', 'aria-label': 'Stop reading', title: 'Stop', disabled: '' }, ICON.stop);
-    var bGear = el('button', { type: 'button', 'class': 'ra-btn ra-gear', 'aria-label': 'Speed and voice options', title: 'Speed and voice', 'aria-expanded': 'false', 'aria-controls': 'ra-opts' }, ICON.gear);
+    var bPlay = el('button', { type: 'button', 'class': 'ra-play', 'aria-label': 'Read aloud' }, '<span class="ra-lbl">Read aloud</span>');
+    var bPrev = el('button', { type: 'button', 'class': 'ra-btn ra-prev', 'aria-label': 'Previous paragraph', title: 'Previous paragraph', disabled: '' }, 'Prev');
+    var bNext = el('button', { type: 'button', 'class': 'ra-btn ra-next', 'aria-label': 'Next paragraph', title: 'Next paragraph', disabled: '' }, 'Next');
+    var bStop = el('button', { type: 'button', 'class': 'ra-btn ra-stop', 'aria-label': 'Stop reading', title: 'Stop', disabled: '' }, 'Stop');
+    var bGear = el('button', { type: 'button', 'class': 'ra-btn ra-gear', 'aria-label': 'Speed and voice options', title: 'Speed and voice', 'aria-expanded': 'false', 'aria-controls': 'ra-opts' }, 'Options');
     [bPlay, bPrev, bNext, bStop, bGear].forEach(function (b) { rowMain.appendChild(b); });
     var opts = el('div', { 'class': 'ra-opts', id: 'ra-opts' });
     var lRate = el('label', { 'class': 'ra-field' }, '<span>Speed</span>'), sRate = el('select', { 'class': 'ra-rate', 'aria-label': 'Reading speed' });
@@ -329,10 +321,9 @@
     function ui() {
       var st = S.status, n = blocks().length;
       bar.setAttribute('data-state', st);
-      var lbl = bPlay.querySelector('.ra-lbl'), ico = bPlay.querySelector('.ra-ico');
+      var lbl = bPlay.querySelector('.ra-lbl');
       var txt = st === 'playing' ? 'Pause' : st === 'paused' ? 'Resume' : 'Read aloud';
       lbl.textContent = txt; bPlay.setAttribute('aria-label', st === 'playing' ? 'Pause reading' : st === 'paused' ? 'Resume reading' : 'Read aloud');
-      if (st === 'playing') { ico.innerHTML = ICON.pause; } else if (st === 'paused') { ico.innerHTML = ICON.play; } else { ico.textContent = '🔊'; }
       bPlay.setAttribute('aria-pressed', st === 'playing' ? 'true' : 'false');
       var active = st !== 'idle';
       bPrev.disabled = bNext.disabled = bStop.disabled = !active;

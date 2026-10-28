@@ -347,11 +347,10 @@ mark { background: #ffe58a; color: inherit; padding: 0 .1em; border-radius: 2px;
 [data-theme="dark"] { --ra-hl: #4a3d10; --ra-edge: #d9b441; }
 html.has-ra { scroll-padding-top: calc(var(--top-h) + 84px); }
 .ra-bar { position: sticky; top: calc(var(--top-h) + 6px); z-index: 30; max-width: 46rem; margin: 0 auto 1.1rem; padding: 8px; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow), 0 4px 14px rgba(0,0,0,.08); font-family: var(--sans); font-size: .95rem; }
-.ra-main { display: flex; align-items: center; gap: 6px; }
-.ra-play, .ra-btn { font: inherit; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 10px; border: 1px solid var(--accent2); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-.ra-play { flex: 1 1 auto; min-width: 0; gap: .45em; padding: 0 10px; background: var(--accent2); color: var(--panel); font-weight: 650; font-size: 1rem; white-space: nowrap; }
-.ra-play .ra-ico { font-size: 1.25rem; line-height: 1; display: inline-flex; }
-.ra-btn { flex: 0 0 48px; width: 48px; padding: 0; background: var(--panel); color: var(--accent2); }
+.ra-main { display: flex; align-items: center; gap: 5px; }
+.ra-play, .ra-btn { font: inherit; display: inline-flex; align-items: center; justify-content: center; min-height: 46px; border-radius: 10px; border: 1px solid var(--accent2); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.ra-play { flex: 1 1 auto; min-width: 0; padding: 0 8px; background: var(--accent2); color: var(--panel); font-weight: 650; font-size: .95rem; white-space: nowrap; }
+.ra-btn { flex: 0 0 auto; min-width: 44px; padding: 0 7px; font-size: .84rem; font-weight: 600; letter-spacing: .01em; background: var(--panel); color: var(--accent2); }
 .ra-play:hover, .ra-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .ra-btn:disabled { opacity: .4; cursor: default; }
 .ra-bar[data-state="playing"] .ra-play { background: var(--accent); border-color: var(--accent); }
